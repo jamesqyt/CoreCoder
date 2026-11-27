@@ -50,7 +50,7 @@ def _git_bash() -> str | None:
 
 
 def run_shell(command: str, check: bool = False, **kwargs) -> subprocess.CompletedProcess:
-    """Run one POSIX command string, via Git Bash on Windows when present.
+    """ 执行系统命令的地方 Run one POSIX command string, via Git Bash on Windows when present.
 
     The list form bypasses cmd.exe entirely; without Git Bash we fall back
     to the platform default (cmd.exe on Windows, /bin/sh elsewhere).

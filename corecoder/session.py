@@ -11,11 +11,12 @@ import uuid
 from pathlib import Path
 
 SESSIONS_DIR = Path.home() / ".corecoder" / "sessions"
-_SAFE_SESSION_RE = re.compile(r"[^A-Za-z0-9._-]+")
+_SAFE_SESSION_RE = re.compile(r"[^A-Za-z0-9._-]+")   # 防止不合规的文件名导致路径穿透
 _MAX_SESSION_ID_LEN = 100  # keep filenames comfortably under the OS limit
 
 
 def _normalize_session_id(session_id: str | None) -> str:
+    """ 正则文件名"""
     if not session_id:
         return _new_session_id()
 
@@ -27,10 +28,12 @@ def _normalize_session_id(session_id: str | None) -> str:
 
 
 def _new_session_id() -> str:
-    return f"session_{time.strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:8]}"
+    """ session文件名"""
+    return f"session_{time.strftime('%m%d_%H%M')}_{uuid.uuid4().hex[:5]}"
 
 
 def _session_path(session_id: str) -> Path:
+    """ 限定严格的文件路径"""
     path = (SESSIONS_DIR / f"{_normalize_session_id(session_id)}.json").resolve()
     root = SESSIONS_DIR.resolve()
     if root != path.parent:

@@ -395,7 +395,7 @@ def load_mcp_tools(path: Path = CONFIG_FILE) -> list[Tool]:
         try:
             if "url" in spec:
                 from .mcp_http import HTTPMCPClient
-
+                # 使用http方式连接云端的MCP服务
                 client = HTTPMCPClient(name, spec["url"], spec.get("headers"))
             else:
                 client = MCPClient(name, spec["command"], spec.get("args", []), spec.get("env"))

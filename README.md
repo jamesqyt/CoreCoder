@@ -2,7 +2,7 @@
 
 # CoreCoder
 
-**The nanoGPT of coding agents. A 1.5k-line engine inside 3,492 readable lines of pure Python: understand how a coding agent actually works, then fork your own.**
+**The nanoGPT of coding agents. A 1.7k-line engine inside 3,678 readable lines of pure Python: understand how a coding agent actually works, then fork your own.**
 
 *learn from it · fork it · ship something better*
 
@@ -12,7 +12,7 @@
 [![Python](https://img.shields.io/badge/python-3.10+-blue)](https://python.org)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Tests](https://github.com/he-yufeng/CoreCoder/actions/workflows/ci.yml/badge.svg)](https://github.com/he-yufeng/CoreCoder/actions)
-[![engine](https://img.shields.io/badge/engine-1532_LoC-blue)](article/00-index_EN.md)
+[![engine](https://img.shields.io/badge/engine-1694_LoC-blue)](article/00-index_EN.md)
 [![essays](https://img.shields.io/badge/source--reading-8_bilingual-orange)](article/00-index_EN.md)
 
 </div>
@@ -25,7 +25,7 @@
 
 | | CoreCoder | Claude Code | aider | nanoGPT |
 |---|---|---|---|---|
-| Lines of code | ~1,532 engine / 3,492 total | hundreds of thousands (closed) | tens of thousands of Python | ~600 (two files) |
+| Lines of code | ~1,694 engine / 3,678 total | hundreds of thousands (closed) | tens of thousands of Python | ~600 (two files) |
 | Time to read it all | one afternoon | can't (closed) | a few days of slogging | one afternoon |
 | Breakpoint, change, rerun? | yes, every line | no | yes, but there's a lot | yes |
 | What it's for | understand one, then fork your own | production coding assistant | terminal pair-programming | minimal GPT for teaching |
@@ -36,7 +36,7 @@ The nanoGPT column is there as a reference point: minimal, readable, but it teac
 
 I've always felt coding agents get talked about as if they were arcane. Strip a tool like Claude Code or Cursor all the way down and the core is a `while` loop wrapped around a large model, plus seven or eight tools that let it actually do things. The hard part was never the loop; it's everything the loop has to cope with once it meets the real world. CoreCoder is the minimal version that writes that core out honestly.
 
-The engine (loop, model interface, context, tools, sessions) is 1,532 lines once you drop blank lines and comments. Counting the outer CLI, config and packaging too, the whole package is 26 files: 3,492 physical lines, 2,900 net, every one short enough to read in a single sitting. The growth since the original 1,161-line snapshot went into visible features: plan mode, hooks and checkpoints, each documented below.
+The engine (loop, model interface, context, tools, sessions) is 1,694 lines once you drop blank lines and comments. Counting the outer CLI, config and packaging too, the whole package is 27 files: 3,678 physical lines, 3,065 net, every one short enough to read in a single sitting. The growth since the original 1,161-line snapshot went into visible features: plan mode, hooks and checkpoints, each documented below.
 
 And it really runs: reads and writes files, executes shell, spawns sub-agents, compacts context in three tiers, and tells you the tokens and dollars a run burned whenever you ask. Anything that would mutate your disk or run a command stops for your consent first. The suite has 422 offline tests and an opt-in live smoke test. But the point of it running isn't to become your daily driver. It runs so the walkthrough can't lie: a reference that shows how an agent works has to actually work.
 
@@ -83,35 +83,59 @@ corecoder                                             # interactive REPL
 corecoder -p "add error handling to parse_config()"   # one-shot mode, exits when done
 ```
 
+### Web search (Tavily / SerpAPI)
+
+The built-in `web_search` tool uses standard-library HTTP clients; no search SDK is needed.
+Set either or both keys in the launch directory's `.env`:
+
+```dotenv
+TAVILY_API_KEY=your-tavily-key
+SERPAPI_API_KEY=your-serpapi-key
+```
+
+Run `python -m corecoder -p "What changed in the latest stable Python release? Cite official sources"`.
+The model decides when to search and builds the query; users do not need to name `web_search` or call it in Python.
+The agent still requires its separate model API key. Tool arguments are `query` (1–400 characters),
+`max_results` (1–10, default 5), and optional `backend` (`hybrid`, `tavily`, or `serpapi`).
+Hybrid tries Tavily first and falls back to SerpAPI on failure or empty results; it does not merge both.
+An explicit provider never falls back. Results include titles, URLs, and snippets, not full web pages.
+
+Search is treated as read-only, including in plan and one-shot modes. Queries leave the machine and use
+the provider account's quota; do not include secrets or private project content. Credentials load at
+execution time. Initialization is silent, search creates no local cache, and errors return as tool results.
+
+API references: [Tavily Search](https://docs.tavily.com/documentation/api-reference/endpoint/search),
+[SerpAPI Google Search](https://serpapi.com/search-api).
+
 ## Read it: the code map
 
 Laid out flat, the whole project is this big. Skim it before you clone and you'll know where everything is. This is the most concrete difference from Claude Code's hundreds of thousands of lines: you can read it like the table of contents of a book. Start from the main loop in `agent.py`; that's the heart of the whole agent.
 
 ```
 corecoder/
-├── agent.py        agent loop + parallel tool exec       240 lines   ← start here
-├── llm.py          streaming client + retry + cost        364 lines
-├── context.py      three-tier context compaction          251 lines
-├── session.py      save / resume + path-traversal guard   101 lines
+├── agent.py        agent loop + parallel tool exec       243 lines   ← start here
+├── llm.py          streaming client + retry + cost        365 lines
+├── context.py      three-tier context compaction          252 lines
+├── session.py      save / resume + path-traversal guard   104 lines
 ├── permissions.py  consent for mutating tools              81 lines
 ├── hooks.py        Pre/PostToolUse shell hooks             87 lines
 ├── shell.py        POSIX shell routing (Git Bash on Windows) 61 lines
 ├── mcp.py          MCP tools, resources, prompt templates  413 lines
 ├── mcp_http.py     remote Streamable HTTP transport       229 lines
 ├── prompt.py       system prompt                           41 lines
-├── cli.py          REPL + slash commands + one-shot       404 lines
+├── cli.py          REPL + slash commands + one-shot       407 lines
 ├── config.py       env-var config                          55 lines
 ├── checkpoints.py  /undo snapshot and restore              125 lines
 ├── demo.py         offline end-to-end demo                 101 lines
 └── tools/
     ├── bash.py       shell + dangerous-command gate + cd  203 lines
-    ├── edit.py       unique-match search/replace + diff   117 lines
-    ├── grep.py       content search                        93 lines
-    ├── glob_tool.py  filename matching                     52 lines
-    ├── read.py       file read                             56 lines
-    ├── write.py      file write                            48 lines
-    ├── todo.py       agent-maintained task checklist       79 lines
-    ├── agent.py      sub-agent teams + isolation         224 lines
+    ├── edit.py       unique-match search/replace + diff   118 lines
+    ├── grep.py       content search                        94 lines
+    ├── glob_tool.py  filename matching                     53 lines
+    ├── read.py       file read                             57 lines
+    ├── write.py      file write                            49 lines
+    ├── todo.py       agent-maintained task checklist       80 lines
+    ├── agent.py      sub-agent teams + isolation         226 lines
     └── base.py       tool base class                       32 lines
 examples/
 ├── plan_hooks_demo.py  offline plan mode + hooks demo (no API key)

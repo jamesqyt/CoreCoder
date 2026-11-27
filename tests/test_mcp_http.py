@@ -26,8 +26,9 @@ def server(request):
         def handle_one_request(self):
             try:
                 super().handle_one_request()
-            except (ConnectionResetError, BrokenPipeError):
-                self.close_connection = True  # the client may finish before the SSE connection does
+            except (ConnectionResetError, ConnectionAbortedError, BrokenPipeError):
+                # Clients may close early; Windows can report an aborted connection (10053).
+                self.close_connection = True
 
         def do_POST(self):
             request = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
@@ -113,7 +114,7 @@ def server(request):
                     self.wfile.write(b"0\r\n\r\n")
                 else:
                     self.wfile.write(body)
-            except (BrokenPipeError, ConnectionResetError):
+            except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
                 pass
 
         def do_DELETE(self):

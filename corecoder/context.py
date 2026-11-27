@@ -25,7 +25,7 @@ _CJK_RE = re.compile(r"[一-鿿㐀-䶿豈-﫿　-〿＀-･]")
 _SYMBOL_RE = re.compile(r"[^\w\s]")
 
 
-def _approx_tokens(text: str) -> int:
+def _approx_tokens(text: str) -> int:   # 使用字符来估算token，后续应该使用tokenizer
     """Rough token count: CJK ~1.5 chars/token, symbol-dense code ~2.8,
     other prose ~3.4. Flat 3-chars counting reads a Chinese-heavy session at
     half its real size, so compression would trigger too late; round up."""
@@ -35,7 +35,7 @@ def _approx_tokens(text: str) -> int:
     return math.ceil(cjk / 1.5) + int(rest / (2.8 if dense else 3.4))
 
 
-def estimate_tokens(messages: list[dict]) -> int:
+def estimate_tokens(messages: list[dict]) -> int:   # 估算整个消息列表
     total = 0
     for m in messages:
         if m.get("content"):
@@ -78,7 +78,7 @@ class ContextManager:
     @staticmethod
     def _snip_tool_outputs(messages: list[dict]) -> bool:
         """Layer 1: Truncate tool results over 1500 chars to their first/last lines.
-
+        TODO:最新工具结果也可能被截,可能要修复；单行字多的也可能不会被截
         This mirrors Claude Code's HISTORY_SNIP which replaces old tool outputs
         with a one-line summary to reclaim context space.
         """
@@ -105,7 +105,7 @@ class ContextManager:
     @staticmethod
     def _safe_split(messages: list[dict], keep_recent: int) -> int:
         """Index where the kept tail should start.
-
+        寻找安全的切分位置，防止工具调用和返回的结果被分开，要保持同在
         Walk the boundary back so a 'tool' result is never separated from the
         assistant message whose tool_calls produced it - an orphaned tool
         message has no preceding tool_calls and OpenAI-compatible APIs reject it.
@@ -121,7 +121,7 @@ class ContextManager:
     @classmethod
     def _split_prior_summary(cls, messages: list[dict]) -> tuple[str, list[dict]]:
         """Separate a summary this manager wrote from the turns after it.
-
+        识别并保留已有摘要，TODO: 旧摘要累计会变长
         Re-summarizing a summary loses detail a little at a time: after a few
         compressions an early fact is gone even though every step looked
         reasonable. Carry the earlier summary forward verbatim and summarize
@@ -135,7 +135,7 @@ class ContextManager:
                     rest = messages[1:]
                     if rest and rest[0].get("role") == "assistant":
                         rest = rest[1:]
-                    return prior, rest
+                    return prior, rest  # 摘要| 剩余真实内容
         return "", messages
 
     def _summarize_old(self, messages: list[dict], llm: LLM | None,
@@ -146,7 +146,7 @@ class ContextManager:
 
         split = self._safe_split(messages, keep_recent)
         old = messages[:split]
-        tail = messages[split:]
+        tail = messages[split:]     # 保留原文的近期消息
 
         prior, fresh = self._split_prior_summary(old)
         if prior and not fresh:
@@ -155,7 +155,7 @@ class ContextManager:
         if prior:
             summary = f"{prior}\n{summary}"
 
-        messages.clear()
+        messages.clear()    # 重建消息列表
         messages.append({
             "role": "user",
             "content": f"{self._SUMMARY_MARKER}\n{summary}",
@@ -164,7 +164,7 @@ class ContextManager:
             "role": "assistant",
             "content": "Got it, I have the context from our earlier conversation.",
         })
-        messages.extend(tail)
+        messages.extend(tail)   # 尾部消息添加
         return True
 
     def _hard_collapse(self, messages: list[dict], llm: LLM | None):
@@ -214,10 +214,11 @@ class ContextManager:
                 pass
 
         # fallback: extract key lines
-        return self._extract_key_info(messages)
+        return self._extract_key_info(messages)     # 做本地的摘要提取
 
     @staticmethod
     def _flatten(messages: list[dict]) -> str:
+        """ 把消息转换成摘要输入"""
         parts = []
         for m in messages:
             role = m.get("role", "?")
@@ -228,7 +229,7 @@ class ContextManager:
 
     @staticmethod
     def _extract_key_info(messages: list[dict]) -> str:
-        """Fallback: extract file paths, errors, and decisions without LLM."""
+        """ 不调用模型的备用摘要。Fallback: extract file paths, errors, and decisions without LLM."""
         import re
         files_seen = set()
         errors = []

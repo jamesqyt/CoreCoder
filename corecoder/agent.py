@@ -4,7 +4,7 @@ This is the heart of CoreCoder.  The pattern is simple:
 
     user message -> LLM (with tools) -> tool calls? -> execute -> loop
                                       -> text reply? -> return to user
-
+负责控制流程：决定什么时候问模型、什么时候执行工具、什么时候结束
 It keeps looping until the LLM responds with plain text (no tool calls),
 which means it's done working and ready to report back.
 """
@@ -33,24 +33,26 @@ class Agent:
         hooks=None,
     ):
         self.llm = llm
-        self.tools = tools if tools is not None else ALL_TOOLS
-        self.permission = permission
-        self.hooks = hooks
-        self._tool_by_name = {t.name: t for t in self.tools}
+        self.tools = tools if tools is not None else ALL_TOOLS  # 加载可用工具
+        self.permission = permission    # 用于权限控制
+        self.hooks = hooks      # 生命周期的钩子
+        self._tool_by_name = {t.name: t for t in self.tools}    
         self.messages: list[dict] = []
         self.context = ContextManager(max_tokens=max_context_tokens)
         self.max_rounds = max_rounds
-        self._system = system_prompt(self.tools)
+        self._system = system_prompt(self.tools)    # 根据当前加载的工具集，动态生成系统提示词
         self.plan_mode = False  # toggled by /plan; while on, mutating tools are refused
 
         # wire up sub-agent capability
         for t in self.tools:
+            """ 遍历所有工具，若是一个agent，那就把它的父亲设置为该实例"""
             if isinstance(t, AgentTool):
                 t._parent_agent = self
 
-        self._todo = next((t for t in self.tools if isinstance(t, TodoWriteTool)), None)
+        self._todo = next((t for t in self.tools if isinstance(t, TodoWriteTool)), None)    # 待办事项工具提取
 
     def _full_messages(self) -> list[dict]:
+        """ 把工具模式、代办工具等信息都加入到提示词（message）中"""
         system = self._system
         # re-injected every round, like the task list below, so a toggle made
         # between turns takes effect on the very next request
@@ -65,12 +67,13 @@ class Agent:
         return [{"role": "system", "content": system}] + self.messages
 
     def _tool_schemas(self) -> list[dict]:
+        """ 转化为openai的工具格式"""
         return [t.schema() for t in self.tools]
 
     def chat(self, user_input: str, on_token=None, on_tool=None, on_reasoning=None) -> str:
         """Process one user message. May involve multiple LLM/tool rounds."""
         self.messages.append({"role": "user", "content": user_input})
-        self.context.maybe_compress(self.messages, self.llm)
+        self.context.maybe_compress(self.messages, self.llm) # 执行可能的上下文压缩
 
         for _ in range(self.max_rounds):
             resp = self.llm.chat(
@@ -112,7 +115,7 @@ class Agent:
                             "tool_call_id": tc.id,
                             "content": result,
                         })
-            except KeyboardInterrupt:
+            except KeyboardInterrupt:   #用户中断
                 # Ctrl+C mid-execution would leave the assistant tool_calls
                 # message without replies, poisoning the next request; backfill
                 self._answer_pending_tool_calls(resp.tool_calls)
@@ -136,7 +139,7 @@ class Agent:
             self.hooks.run_post(tc.name, tc.arguments, result)
 
     def _permit(self, tc) -> str | None:
-        """Consent check for one call. None means go ahead; a string is the
+        """ 检查计划模式，同时判断工具是不是只读的。 Consent check for one call. None means go ahead; a string is the
         refusal, returned as the tool result instead of executing."""
         # plan mode outranks consent, even --yes: while it's on nothing mutates
         if self.plan_mode and tc.name not in Permission.READ_ONLY:
@@ -158,12 +161,12 @@ class Agent:
         # validate arguments first so a TypeError raised *inside* the tool isn't
         # mislabelled as a bad-arguments error from the caller
         try:
-            inspect.signature(tool.execute).bind(**tc.arguments)
+            inspect.signature(tool.execute).bind(**tc.arguments)    # 是传递参数有问题
         except TypeError as e:
             return f"Error: bad arguments for {tc.name}: {e}"
         # a tool that blows up gets reported back as text, never kills the loop
         try:
-            return tool.execute(**tc.arguments)
+            return tool.execute(**tc.arguments)     # 还是工具内部有问题
         except Exception as e:  # noqa: BLE001
             return f"Error executing {tc.name}: {e}"
 
@@ -216,7 +219,7 @@ class Agent:
 
     def _answer_pending_tool_calls(self, tool_calls):
         """Backfill a tool reply for every call that didn't get one.
-
+        给没拿到回复的工具调用补一条 [interrupted] 占位回复，让消息历史重新合法
         OpenAI-compatible APIs reject a request where an assistant message has
         tool_calls without a matching tool reply for each id, so this keeps the
         history valid when execution is interrupted partway through.

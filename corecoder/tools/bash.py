@@ -23,12 +23,12 @@ _local = threading.local()
 
 
 def get_tracked_cwd() -> str | None:
-    """The cwd tracked for this thread, if any."""
+    """ 返回当前线程记录的工作目录，没跟踪过cd，那就返回None"""
     return getattr(_local, "cwd", None)
 
 
 def set_tracked_cwd(path: str | None) -> None:
-    """Set the tracked cwd for this thread (session handoff at pool edges)."""
+    """ 设置或清除当前线程的工作目录，path是目录路径时，把它保存为当前线程目录"""
     if path is None:
         if hasattr(_local, "cwd"):
             del _local.cwd
@@ -37,6 +37,7 @@ def set_tracked_cwd(path: str | None) -> None:
 
 # patterns that could wreck the filesystem or leak secrets
 _DANGEROUS_PATTERNS = [
+    # 危险命令检测，不是安全边界
     # recursive delete aimed at root/home (force flag optional)
     (r"\brm\s+(-\w*)?-r\w*\s+(/|~|\$HOME)", "recursive delete on home/root"),
     # recursive (-r/-R) and force (-f) flags together, in any order or spacing
@@ -76,15 +77,15 @@ class BashTool(Tool):
 
     def execute(self, command: str, timeout: int = 120) -> str:
         # safety check
-        warning = _check_dangerous(command)
+        warning = _check_dangerous(command) # 检测是不是危险命令
         if warning:
             return f"⚠ Blocked: {warning}\nCommand: {command}\nIf intentional, modify the command to be more specific."
 
-        # use this thread's own tracked working directory
+        # use this thread's own tracked working directory   确定当前目录
         cwd = get_tracked_cwd() or os.getcwd()
 
         try:
-            proc = run_shell(
+            proc = run_shell(   # 最终是由shell.py中的函数执行
                 command,
                 check=False,
                 capture_output=True,
@@ -101,11 +102,11 @@ class BashTool(Tool):
             out = proc.stdout
             if proc.stderr:
                 out += f"\n[stderr]\n{proc.stderr}"
-            if proc.returncode != 0:
+            if proc.returncode != 0:    # 附上退出码
                 out += f"\n[exit code: {proc.returncode}]"
             # keep head + tail to preserve the most useful info
             if len(out) > 15_000:
-                out = (
+                out = (     # 限制输出长度
                     out[:6000]
                     + f"\n\n... truncated ({len(out)} chars total) ...\n\n"
                     + out[-3000:]
@@ -127,18 +128,17 @@ def _check_dangerous(cmd: str) -> str | None:
 
 
 def _split_words(statement: str) -> list[str]:
-    """Split one statement into words on unquoted whitespace, stripping the
-    quotes. Backslashes are kept verbatim (Windows paths must not lose them,
+    """把一条shell语句拆成单词，用于后续识别cd命令。Backslashes are kept verbatim (Windows paths must not lose them,
     so this deliberately does not use shlex's posix escape processing)."""
-    words: list[str] = []
-    buf: list[str] = []
-    quote: str | None = None
+    words: list[str] = []   # 最终结果：存放切分好的词语
+    buf: list[str] = []     # 缓冲区：临时拼接当前正在读取的字符
+    quote: str | None = None    # 状态标记：当前是否处于引号内部（记录是单双引号）
     for ch in statement:
         if quote is not None:
             if ch == quote:
-                quote = None
+                quote = None    # 遇到匹配的闭合引号，退出引号状态
             else:
-                buf.append(ch)
+                buf.append(ch)  # 普通字符（包括空格），原样加入缓冲区
         elif ch in ("'", '"'):
             quote = ch
         elif ch.isspace():
@@ -184,7 +184,7 @@ def _split_statements(command: str) -> list[list[str]]:
 
 
 def _update_cwd(command: str, current_cwd: str):
-    """Track directory changes from cd commands, per thread."""
+    """扫描命令里的 cd，在命令成功后更新当前线程的工作目录"""
     # walk each cd in a && or ; chain, resolving relative targets against the dir the
     # previous cd landed in (not the original cwd) so `cd a && cd b` ends in a/b.
     # a parenthesized group is a subshell — `( cd a )` never changes this shell's

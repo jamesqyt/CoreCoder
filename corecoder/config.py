@@ -28,9 +28,9 @@ class Config:
     model: str = "gpt-5.5"
     api_key: str = ""
     base_url: str | None = None
-    max_tokens: int = 4096
+    max_tokens: int = 4096      #单次对话/请求的最大输出 token 数限制（回答长度上限）
     temperature: float = 0.0
-    max_context_tokens: int = 128_000
+    max_context_tokens: int = 128_000   # 上下文窗口总大小
     provider: str = "openai"
 
     @classmethod

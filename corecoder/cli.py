@@ -33,12 +33,12 @@ def _parse_args():
     p.add_argument("-m", "--model", help="Model name (default: $CORECODER_MODEL or gpt-5.5)")
     p.add_argument("--base-url", help="API base URL (default: $OPENAI_BASE_URL)")
     p.add_argument("--api-key", help="API key (default: $OPENAI_API_KEY)")
-    p.add_argument("-p", "--prompt", help="One-shot prompt (non-interactive mode)")
-    p.add_argument("--yes", action="store_true", help="Auto-approve every tool call (for scripts and CI)")
-    p.add_argument("--demo", action="store_true", help="Run the offline scripted demo (no API key needed)")
-    p.add_argument("-r", "--resume", metavar="ID", help="Resume a saved session")
-    p.add_argument("--list-sessions", action="store_true", help="List saved sessions offline")
-    p.add_argument("-v", "--version", action="version", version=f"%(prog)s {__version__}")
+    p.add_argument("-p", "--prompt", help="One-shot prompt (non-interactive mode)")     # 单次运行模式提示词
+    p.add_argument("--yes", action="store_true", help="Auto-approve every tool call (for scripts and CI)")  # 自动批准所有工具调用
+    p.add_argument("--demo", action="store_true", help="Run the offline scripted demo (no API key needed)")     # 运行离线演示模式
+    p.add_argument("-r", "--resume", metavar="ID", help="Resume a saved session")       # 恢复已保存的会话 ID
+    p.add_argument("--list-sessions", action="store_true", help="List saved sessions offline")  # 列出所有保存的会话
+    p.add_argument("-v", "--version", action="version", version=f"%(prog)s {__version__}")  # 显示版本号
     args = p.parse_args()
     if args.list_sessions and (args.demo or args.prompt is not None or args.resume is not None):
         p.error("--list-sessions cannot be combined with --demo, --prompt or --resume")
@@ -46,6 +46,7 @@ def _parse_args():
 
 
 def _show_sessions():
+    """ 显示会话列表"""
     sessions = list_sessions()
     if not sessions:
         console.print("[dim]No saved sessions.[/dim]")
@@ -91,7 +92,7 @@ def main():
         sys.exit(1)
 
     llm_cls = LiteLLM if config.provider == "litellm" else LLM
-    llm = llm_cls(
+    llm = llm_cls(      # 创建模型
         model=config.model,
         api_key=config.api_key,
         base_url=config.base_url,
@@ -105,7 +106,7 @@ def main():
         permission = Permission()
     else:
         permission = Permission(ask=_ask_permission, persist_path=DEFAULT_STORE)
-    agent = Agent(
+    agent = Agent(  # 创建agent
         llm=llm,
         tools=[*ALL_TOOLS, *load_mcp_tools()],
         max_context_tokens=config.max_context_tokens,
@@ -213,7 +214,7 @@ def _repl(agent: Agent, config: Config):
     while True:
         try:
             user_input = pt_prompt(
-                "You (plan) > " if agent.plan_mode else "You > ",
+                "You (plan) >>> " if agent.plan_mode else "You >>> ",
                 history=history,
                 multiline=True,
                 key_bindings=kb,
@@ -316,10 +317,12 @@ def _repl(agent: Agent, config: Config):
         streamed: list[str] = []
 
         def on_token(tok, streamed=streamed):
+            """ 让字一个个的冒出来"""
             streamed.append(tok)
             print(tok, end="", flush=True)
 
         def on_tool(name, kwargs):
+            """ 每次调工具前打一行灰字,显示相关信息"""
             console.print(f"\n[dim]> {name}({_brief(kwargs)})[/dim]")
 
         def on_reasoning(tok, streamed=streamed):

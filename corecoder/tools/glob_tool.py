@@ -7,6 +7,7 @@ from .base import Tool
 
 
 class GlobTool(Tool):
+    """ 按通配符搜索文件 """
     name = "glob"
     description = (
         "Find files matching a glob pattern. "
@@ -35,7 +36,7 @@ class GlobTool(Tool):
             if not base.is_dir():
                 return f"Error: {path} is not a directory"
 
-            hits = list(base.glob(pattern))
+            hits = list(base.glob(pattern)) # 根据通配符匹配路径
             # sort by mtime, newest first
             hits.sort(key=lambda p: p.stat().st_mtime if p.exists() else 0, reverse=True)
 
@@ -45,7 +46,7 @@ class GlobTool(Tool):
             result = "\n".join(lines)
 
             if total > 100:
-                result += f"\n... ({total} matches, showing first 100)"
+                result += f"\n... ({total} matches, showing first 100)" # 最多显示100个匹配的文件
             return result or "No files matched."
         except Exception as e:  # noqa: BLE001
             # boundary: the agent gets an error string, not a traceback

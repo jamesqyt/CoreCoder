@@ -11,6 +11,7 @@ _SKIP_DIRS = {".git", "node_modules", "__pycache__", ".venv", "venv", ".tox", "d
 
 
 class GrepTool(Tool):
+    """ 搜索文件里面的内容"""
     name = "grep"
     description = (
         "Search file contents with regex. "

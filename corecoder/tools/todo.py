@@ -20,6 +20,7 @@ _VALID_STATUS = ("pending", "in_progress", "done")
 
 
 class TodoWriteTool(Tool):
+    """ 维护 Agent 的任务清单"""
     name = "todo_write"
     description = (
         "Manage the session task checklist. Pass the complete list every time; it fully "

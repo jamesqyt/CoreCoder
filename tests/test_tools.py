@@ -8,7 +8,7 @@ from tests.conftest import get_tool
 
 
 def test_tool_count():
-    assert len(ALL_TOOLS) == 8
+    assert len(ALL_TOOLS) == 10
 
 
 def test_all_tools_have_valid_schema():
@@ -24,6 +24,10 @@ def test_all_tools_have_valid_schema():
 
 
 # --- bash ---
+def test_fetch_rejects_non_http():
+    fetch = get_tool("fetch_url")
+    r = fetch.execute(url="file:///etc/passwd")
+    assert "only http" in r
 
 def test_bash_basic():
     bash = get_tool("bash")

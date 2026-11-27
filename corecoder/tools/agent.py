@@ -19,6 +19,7 @@ _MAX_TEAM_SIZE = 8
 
 
 class AgentTool(Tool):
+    """ 把子 Agent 封装为工具"""
     name = "agent"
     description = (
         "Spawn a sub-agent to handle a complex sub-task independently. "
@@ -132,19 +133,20 @@ class AgentTool(Tool):
         try:
             set_tracked_cwd(cwd)
             name = item.get("name")
+            # 构建prompt
             prompt = item["task"] if name is None else f"You are {name}.\n\n{item['task']}"
             if dependency_reports:
                 prompt += "\n\nCompleted upstream reports:\n" + "\n\n".join(
                     f"### {dependency}\n{report}" for dependency, report in dependency_reports.items()
                 )
-            result = self._new_subagent().chat(prompt)
-            if len(result) > 5000:
+            result = self._new_subagent().chat(prompt)  # 创建对话
+            if len(result) > 5000:  # 截断过长文本
                 result = result[:4500] + "\n... (sub-agent output truncated)"
             return result
         except Exception as e:  # noqa: BLE001
             return f"Sub-agent error: {e}"
         finally:
-            set_tracked_cwd(previous)
+            set_tracked_cwd(previous)   # 恢复线程之前的工作目录状态
 
     def execute(self, task: str | None = None, tasks: list[dict] | None = None) -> str:
         if self._parent_agent is None:

@@ -8,6 +8,8 @@ from .grep import GrepTool
 from .read import ReadFileTool
 from .todo import TodoWriteTool
 from .write import WriteFileTool
+from .searchTool import WebSearchTool
+from .fecth import FetchUrlTool
 
 ALL_TOOLS = [
     BashTool(),
@@ -18,5 +20,7 @@ ALL_TOOLS = [
     GrepTool(),
     TodoWriteTool(),
     AgentTool(),
+    WebSearchTool(),
+    FetchUrlTool(),
 ]
 

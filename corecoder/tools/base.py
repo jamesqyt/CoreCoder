@@ -16,11 +16,11 @@ class Tool(ABC):
     parameters: dict  # JSON Schema for the function args
 
     @abstractmethod
-    def execute(self, **kwargs) -> str:
+    def execute(self, **kwargs) -> str: # 抽象方法，具体实现在继承中
         """Run the tool and return a text result."""
         ...
 
-    def schema(self) -> dict:
+    def schema(self) -> dict:   # openai的工具格式
         """OpenAI function-calling schema."""
         return {
             "type": "function",

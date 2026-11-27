@@ -10,6 +10,7 @@ from .edit import _changed_files
 
 
 class WriteFileTool(Tool):
+    """ 创建或者覆盖文件"""
     name = "write_file"
     description = (
         "Create a new file or completely overwrite an existing one. "

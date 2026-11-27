@@ -2,7 +2,7 @@
 
 # CoreCoder
 
-**编程 agent 里的 nanoGPT。1.5k 行引擎、整包 3492 行纯 Python 全部一口气可读，读懂一个 coding agent 到底怎么运作，再 fork 出你自己的。**
+**编程 agent 里的 nanoGPT。1.7k 行引擎、整包 3678 行纯 Python 全部一口气可读，读懂一个 coding agent 到底怎么运作，再 fork 出你自己的。**
 
 *learn from it · fork it · ship something better*
 
@@ -12,7 +12,7 @@
 [![Python](https://img.shields.io/badge/python-3.10+-blue)](https://python.org)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Tests](https://github.com/he-yufeng/CoreCoder/actions/workflows/ci.yml/badge.svg)](https://github.com/he-yufeng/CoreCoder/actions)
-[![engine](https://img.shields.io/badge/engine-1532_LoC-blue)](article/)
+[![engine](https://img.shields.io/badge/engine-1694_LoC-blue)](article/)
 [![源码导读](https://img.shields.io/badge/源码导读-8篇双语-orange)](article/)
 
 </div>
@@ -25,7 +25,7 @@
 
 | | CoreCoder | Claude Code | aider | nanoGPT |
 |---|---|---|---|---|
-| 代码量 | 引擎约 1532 行 / 整包 3492 行 | 几十万行（闭源） | 数万行 Python | 约 600 行（两个文件） |
+| 代码量 | 引擎约 1694 行 / 整包 3678 行 | 几十万行（闭源） | 数万行 Python | 约 600 行（两个文件） |
 | 读完要多久 | 一个下午 | 读不了（闭源） | 得啃几天 | 一个下午 |
 | 能不能下断点改了再跑 | 能，每一行 | 不能 | 能，但量大 | 能 |
 | 定位 | 读懂并 fork 出你自己的 agent | 生产级编程助手 | 终端结对编程 | 教学用最小 GPT |
@@ -36,7 +36,7 @@ nanoGPT 那一列是拿来对照的：它最小、可读，但教的是训一个
 
 我一直觉得 coding agent 被讲得太玄了。把 Claude Code、Cursor 这类工具扒到底，核心是一个 while 循环套着一个大模型，外加七八个让它能真正动手的工具。难的从来不是这个循环，而是循环跑进真实世界以后要兜的那些底。CoreCoder 就是把这个核心老老实实写出来的最小版本。
 
-引擎部分（循环、模型接口、上下文、工具、会话）去掉空行和注释是 1532 行。连最外层的 CLI、配置、打包一起算，整个包 26 个文件、物理 3492 行、净 2900 行，每个文件都短到能一口气读完。自 1161 行快照之后的增长都花在了看得见的功能上：plan mode、hooks、checkpoints，下文各有交代。
+引擎部分（循环、模型接口、上下文、工具、会话）去掉空行和注释是 1694 行。连最外层的 CLI、配置、打包一起算，整个包 27 个文件、物理 3678 行、净 3065 行，每个文件都短到能一口气读完。自 1161 行快照之后的增长都花在了看得见的功能上：plan mode、hooks、checkpoints，下文各有交代。
 
 它真能跑：读写文件、执行 shell、派子 agent、分三层压上下文，还能随时把这趟烧掉的 token 和美元数报给你。任何要动你磁盘、要跑命令的调用，都会先停下来等你点头。现在有 422 个离线测试，另有按需开启的真实 API 冒烟。但能跑不是为了劝你拿去日用，而是为了让这份「注释」不撒谎：一个解释 agent 怎么运作的范例，自己得真能运作。
 
@@ -83,35 +83,61 @@ corecoder                                  # 交互式 REPL
 corecoder -p "给 parse_config() 加错误处理"   # 一次性模式，干完就退
 ```
 
+### 联网搜索（Tavily / SerpAPI）
+
+内置 `web_search` 工具使用标准库访问搜索服务，无需额外安装搜索 SDK。
+在启动目录的 `.env` 中配置一个或两个密钥：
+
+```dotenv
+TAVILY_API_KEY=你的Tavily密钥
+SERPAPI_API_KEY=你的SerpAPI密钥
+```
+
+然后运行 `python -m corecoder`，直接描述任务，例如“Python 最新稳定版有哪些变化？请附官方来源”。
+模型会根据任务决定是否搜索、生成查询词并调用工具，用户无需指定 `web_search` 或编写工具调用代码。
+也可以运行 `python -m corecoder -p "Python 最新稳定版有哪些变化？请附官方来源"`。
+正常启动仍需配置用于 Agent 的模型 API key；搜索密钥不能代替模型密钥。
+
+参数为 `query`（1～400 字符）、`max_results`（1～10，默认 5）和可选的
+`backend`（`hybrid`、`tavily`、`serpapi`）。默认 `hybrid` 先使用 Tavily，失败或无结果时再尝试
+SerpAPI；它不是双引擎合并。指定单一后端时不会自动切换。返回标题、链接和摘要，不抓取完整网页。
+
+搜索按只读工具处理，在 plan mode 和一次性模式中也可调用。查询会发送给外部服务并使用对应账户额度，
+不要将密钥或私密项目内容放入查询。工具在执行时加载配置，初始化不打印提示，也不保存本地搜索缓存。
+缺少密钥、超时或服务错误会作为工具结果返回，交由 Agent 处理。
+
+接口参考：[Tavily Search](https://docs.tavily.com/documentation/api-reference/endpoint/search)、
+[SerpAPI Google Search](https://serpapi.com/search-api)。
+
 ## 读懂它：代码地图
 
 整个项目摊开就这么大，clone 之前扫一眼，心里就有数了。这也是它和 Claude Code 几十万行最实在的区别：你能把它当一本书的目录来读。建议从 `agent.py` 的主循环读起，那是整个 agent 的心脏。
 
 ```
 corecoder/
-├── agent.py        agent 主循环 + 并行工具执行       240 行   ← 从这里开始读
-├── llm.py          流式客户端 + 重试 + 成本统计       364 行
-├── context.py      三层上下文压缩                     251 行
-├── session.py      会话存盘 / 续聊 + 路径穿越防护     101 行
+├── agent.py        agent 主循环 + 并行工具执行       243 行   ← 从这里开始读
+├── llm.py          流式客户端 + 重试 + 成本统计       365 行
+├── context.py      三层上下文压缩                     252 行
+├── session.py      会话存盘 / 续聊 + 路径穿越防护     104 行
 ├── permissions.py  改动类工具的用户授权                81 行
 ├── hooks.py        工具调用前后的用户 shell 钩子        87 行
 ├── shell.py        POSIX shell 路由（Windows 走 Git Bash） 61 行
 ├── mcp.py          MCP 工具、文本资源和提示模板         413 行
 ├── mcp_http.py     远程 Streamable HTTP 连接           229 行
 ├── prompt.py       系统提示词                          41 行
-├── cli.py          REPL + 斜杠命令 + 一次性模式        404 行
+├── cli.py          REPL + 斜杠命令 + 一次性模式        407 行
 ├── config.py       环境变量配置                        55 行
 ├── checkpoints.py  /undo 快照与回滚                     125 行
 ├── demo.py         离线端到端演示                       101 行
 └── tools/
     ├── bash.py       shell + 危险命令闸 + cd 追踪      203 行
-    ├── edit.py       唯一匹配搜索替换 + diff           117 行
-    ├── grep.py       内容搜索                           93 行
-    ├── glob_tool.py  文件名匹配                         52 行
-    ├── read.py       文件读取                           56 行
-    ├── write.py      文件写入                           48 行
-    ├── todo.py       agent 自维护的任务清单             79 行
-    ├── agent.py      子 agent 团队与隔离                224 行
+    ├── edit.py       唯一匹配搜索替换 + diff           118 行
+    ├── grep.py       内容搜索                           94 行
+    ├── glob_tool.py  文件名匹配                         53 行
+    ├── read.py       文件读取                           57 行
+    ├── write.py      文件写入                           49 行
+    ├── todo.py       agent 自维护的任务清单             80 行
+    ├── agent.py      子 agent 团队与隔离                226 行
     └── base.py       工具基类                           32 行
 examples/
 ├── plan_hooks_demo.py  离线 plan mode + hooks 演示（免 API key）
@@ -192,7 +218,7 @@ worker 名不能重复，依赖必须指向已有名字，循环依赖会在任�
 
 读懂之后，最自然的下一步就是 fork。起手不用伤筋动骨：
 
-- **换个你常用的模型。** 就是上面那两个环境变量，`llm.py`（364 行）是所有 provider 适配的入口。
+- **换个你常用的模型。** 就是上面那两个环境变量，`llm.py`（365 行）是所有 provider 适配的入口。
 - **加一件你自己的工具。** 照 `tools/base.py`（32 行）的工具基类写个新文件，跑测试、抓网页、调 LSP 都行，第二篇文章末尾手把手带你写第一个。
 - **改系统提示词。** `prompt.py` 才 41 行，改一句就能看到 agent 的脾气变了，是门槛最低的「改一处就有反馈」。
 - **直接当库 import。** 顶层导出了 `Agent`、`LLM`、`Config`，能嵌进你自己的程序：

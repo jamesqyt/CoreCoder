@@ -94,6 +94,7 @@ class EditFileTool(Tool):
                 _changed_files.add(str(p))
 
             # generate a unified diff so the user/LLM can see exactly what changed
+            # 用来记录两个文件之间的差异
             diff = _unified_diff(content, new_content, str(p))
             return f"Edited {file_path}\n{diff}"
         except Exception as e:  # noqa: BLE001

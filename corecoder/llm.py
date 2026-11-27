@@ -1,5 +1,5 @@
 """LLM provider layer - thin wrapper over OpenAI-compatible APIs.
-
+把消息发给模型，接收流式回答，并把模型提出的工具调用解析成结构化结果。
 Since most providers (DeepSeek, Qwen, Kimi, GLM, Ollama, etc.) expose an
 OpenAI-compatible endpoint, we just use the openai SDK directly.  Switch
 provider by changing OPENAI_BASE_URL + OPENAI_API_KEY. That's it.
@@ -58,6 +58,7 @@ class LLMResponse:
 # sources: openai.com/api/pricing, api-docs.deepseek.com, platform.claude.com,
 #          platform.moonshot.ai, alibabacloud.com/help/en/model-studio
 _PRICING = {
+    # 每百万 token 价格(input、output)
     # OpenAI - current flagships
     "gpt-5.5": (5, 30),
     "gpt-5.4": (2.5, 15),
@@ -131,7 +132,7 @@ class LLM:
         **kwargs,
     ):
         self.model = model
-        self.client = OpenAI(api_key=api_key, base_url=base_url)
+        self.client = OpenAI(api_key=api_key, base_url=base_url)    # openai兼容封装
         self.extra = kwargs  # temperature, max_tokens, etc.
         self.total_prompt_tokens = 0
         self.total_completion_tokens = 0
@@ -166,7 +167,7 @@ class LLM:
         params: dict = {
             "model": self.model,
             "messages": messages,
-            "stream": True,
+            "stream": True,     # 实时接收、反馈
             **self.extra,
         }
         if tools:
@@ -194,7 +195,7 @@ class LLM:
                         raise
                     params.pop("stream_options")
             try:
-                return self._drain(stream, on_token, on_reasoning)
+                return self._drain(stream, on_token, on_reasoning)  # 收集模型的返回信息
             except (RateLimitError, APITimeoutError, APIConnectionError) as e:
                 last_err = e
             except APIError as e:
@@ -212,7 +213,7 @@ class LLM:
         raise last_err
 
     def _drain(self, stream, on_token, on_reasoning) -> LLMResponse:
-        """Consume one stream into an LLMResponse."""
+        """ Consume one stream into an LLMResponse.零散的流式反馈拼接成完整的LLM响应 """
         content_parts: list[str] = []
         reasoning_parts: list[str] | None = None
         tc_map: dict[int, dict] = {}  # index -> {id, name, arguments_str}
@@ -280,7 +281,7 @@ class LLM:
             self.total_prompt_tokens += prompt_tok
             self.total_completion_tokens += completion_tok
 
-        return LLMResponse(
+        return LLMResponse(     # 返回给agent
             content="".join(content_parts),
             tool_calls=parsed,
             prompt_tokens=prompt_tok,
@@ -290,8 +291,8 @@ class LLM:
             ),
         )
 
-    def _call_with_retry(self, params: dict, max_retries: int = 3):
-        """Retry on transient errors with exponential backoff."""
+    def _call_with_retry(self, params: dict, max_retries: int = 3): # 重试机制
+        """Retry on transient errors（指数退避） with exponential backoff."""
         for attempt in range(max_retries):
             try:
                 return self.client.chat.completions.create(**params)
@@ -311,7 +312,7 @@ class LLM:
 
 class LiteLLM(LLM):
     """LLM backend via LiteLLM, supporting 100+ providers.
-
+    非 OpenAI 兼容模型支持
     Use this when your target provider is NOT OpenAI-compatible
     (AWS Bedrock, Google Vertex, Cohere, etc.) or when you want
     a single interface to switch between any provider by changing
